@@ -1,7 +1,11 @@
 """tools/rag_tool.py — Search the local ChromaDB for relevant documents."""
 
-import config
-from query import search_text
+try:
+    import config
+    from query import search_text
+    _RAG_AVAILABLE = True
+except ImportError:
+    _RAG_AVAILABLE = False
 
 TOOL_DEFINITION = {
     "type": "function",
@@ -17,7 +21,7 @@ TOOL_DEFINITION = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The semantic search query — rephrase as a factual question.",
+                    "description": "The semantic search query.",
                 }
             },
             "required": ["query"],
@@ -27,18 +31,17 @@ TOOL_DEFINITION = {
 
 
 def run(query: str) -> str:
-    """Execute RAG search and return a formatted string for the LLM."""
+    if not _RAG_AVAILABLE:
+        return "Document search is not available in this environment."
     try:
-        results = search_text(query, n_results=config.RAG_TOP_K)
-    except FileNotFoundError:
-        return "Document database not initialized. No documents ingested yet."
+        import config as _config
+        results = search_text(query, n_results=_config.RAG_TOP_K)
     except Exception as e:
         return f"RAG search error: {e}"
 
-    results = [r for r in results if r["similarity"] >= config.RAG_SIMILARITY_THRESHOLD]
-
+    results = [r for r in results if r["similarity"] >= _config.RAG_SIMILARITY_THRESHOLD]
     if not results:
-        return "No relevant documents found in the local database for this query."
+        return "No relevant documents found for this query."
 
     parts = []
     for i, r in enumerate(results, 1):
@@ -47,5 +50,4 @@ def run(query: str) -> str:
         snippet  = (r.get("document") or "")[:600].replace("\n", " ")
         score    = r["similarity"]
         parts.append(f"[Document {i} | File: {filename} | Relevance: {score:.2f}]\n{snippet}")
-
     return "\n\n".join(parts)
