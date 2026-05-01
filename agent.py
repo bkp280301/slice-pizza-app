@@ -13,16 +13,14 @@ import sys
 from groq import Groq
 
 import config
-from tools import rag_tool, web_tool, location_tool, weather_tool
+from tools import web_tool, location_tool
 
 # ── Tool registry ──────────────────────────────────────────────────────────────
 
 TOOL_EXECUTORS = {
-    "get_weather":      lambda args: weather_tool.run(**args),
     "find_location":    lambda args: location_tool.run(**args),
     "search_web":       lambda args: web_tool.run_search(**args),
     "scrape_webpage":   lambda args: web_tool.run_scrape(**args),
-    "search_documents": lambda args: rag_tool.run(**args),
 }
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
@@ -30,19 +28,21 @@ TOOL_EXECUTORS = {
 DECISION_PROMPT = """You are a pizza expert assistant tool router. You ONLY answer pizza-related questions.
 
 Available tools:
-- find_location : find pizza restaurants, pizza chains (Domino's, Pizza Hut, Papa John's etc.), delivery places → args: {{"place_name": "pizza chain or restaurant near location"}}
-- search_web    : pizza recipes, ingredients, history, calories, prices, chain menus, pizza news → args: {{"query": "search terms", "max_results": 5}}
-- no_tool       : pizza calculations, pizza math, greetings, general pizza knowledge you already know → args: {{}}
+- find_location : find pizza restaurants, pizza chains (Domino's, Pizza Hut, Papa John's, Little Caesars, etc.), opening hours, delivery places → args: {{"place_name": "pizza chain or restaurant near location"}}
+- search_web    : ANYTHING about pizza — recipes, toppings, ingredients, history, calories, nutrition, dough, sauce, cheese, baking tips, pizza styles, chain menus, prices, pizza news, Greek pizza, Neapolitan pizza, any pizza type → args: {{"query": "detailed search terms", "max_results": 5}}
+- no_tool       : ONLY for simple math (cost per slice, number of slices), greetings, or when you 100% already know the answer from training data → args: {{}}
 
-Rules:
+Rules (follow strictly):
+- ANY question about a pizza chain + location → find_location
 - "near me", "nearby", "nearest", "open now", "timings", "hours" → find_location
-- Any pizza chain name (Domino's, Pizza Hut, Papa John's, etc.) with location → find_location
-- "recipe", "how to make", "ingredients", "calories", "nutrition", "history", "price", "menu" → search_web
-- Simple pizza calculations (slices, cost per slice, calories estimate) → no_tool
-- Non-pizza questions → no_tool (you will politely redirect to pizza topics)
+- ANY question about pizza recipes, types, styles, toppings, ingredients, history, nutrition, how to make, baking → search_web
+- Greek pizza, Neapolitan, Sicilian, Chicago, NY style, any regional pizza → search_web
+- Prices, menus, chain info without location → search_web
+- When in doubt → search_web (never guess, always search)
+- Non-pizza questions → no_tool (politely redirect)
 
-Respond with ONLY a single JSON object. Example:
-{{"tool": "find_location", "args": {{"place_name": "Domino's near Chennai"}}}}
+Respond with ONLY a single JSON object, nothing else.
+Example: {{"tool": "search_web", "args": {{"query": "Greek pizza toppings and recipe", "max_results": 5}}}}
 
 User message: {user_message}"""
 
