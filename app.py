@@ -235,6 +235,25 @@ div[class*="stChatInputContainer"] > div {
     box-shadow: none !important;
 }
 
+/* ── HIDE AVATAR ICONS / TEXT (face, smart_t glitches) ── */
+[data-testid="stChatMessageAvatarUser"],
+[data-testid="stChatMessageAvatarAssistant"],
+[data-testid="chatAvatarIcon-user"],
+[data-testid="chatAvatarIcon-assistant"],
+[data-testid="stChatMessage"] img,
+[data-testid="stChatMessage"] [data-testid*="Avatar"],
+.stChatMessage [class*="avatar"],
+[data-testid="stChatMessage"] > div:first-child > div:first-child {
+    display: none !important;
+}
+
+/* ── HIDE FILE PATH / DEBUG TEXT at bottom ── */
+[data-testid="stException"],
+[data-testid="stException"] * { display: none !important; }
+footer, [class*="footer"] { display: none !important; }
+    box-shadow: none !important;
+}
+
 /* ── 14. EXPANDER ── */
 [data-testid="stExpander"],
 [data-testid="stExpander"] > div,
