@@ -181,25 +181,34 @@ def run_agent_stream(
         tool_result = _run_web_and_scrape(query, on_tool_call=on_tool_call)
 
     elif tool_name == "find_location":
+        place_name = tool_args.get("place_name", user_message)
         if on_tool_call:
-            on_tool_call(f"Finding \"{tool_args.get('place_name', '')}\"")
+            on_tool_call(f"Checking map data for \"{place_name}\"")
         try:
-            tool_result = TOOL_EXECUTORS["find_location"](tool_args)
-        except Exception as e:
-            tool_result = ""
+            osm_result = TOOL_EXECUTORS["find_location"](tool_args)
+        except Exception:
+            osm_result = ""
 
-        # If location search failed, fall back to web
-        if not tool_result or "No location found" in tool_result or "Could not detect" in tool_result:
-            business, location = _extract_business_and_location(user_message)
-            if not location:
-                try:
-                    location = location_tool.get_ip_location()
-                except Exception:
-                    location = ""
-            web_query = f"{business} near {location}" if location else f"{business} pizza restaurant"
-            if on_tool_call:
-                on_tool_call(f"Searching web for \"{web_query}\"")
-            tool_result = _run_web_and_scrape(web_query, on_tool_call=on_tool_call)
+        # Always supplement with a targeted web search — chain store locators
+        # give far more accurate and up-to-date results than OSM data.
+        business, location = _extract_business_and_location(user_message)
+        if not location:
+            try:
+                location = location_tool.get_ip_location()
+            except Exception:
+                location = ""
+        web_query = f"{business} pizza near {location} address hours" if location else f"{business} pizza locations"
+        if on_tool_call:
+            on_tool_call(f"Searching web for \"{web_query}\"")
+        web_result = _run_web_and_scrape(web_query, on_tool_call=on_tool_call)
+
+        if osm_result and not _search_failed(osm_result):
+            # Merge OSM + web
+            tool_result = osm_result
+            if web_result and not _search_failed(web_result):
+                tool_result += f"\n\n---\nAdditional web results:\n{web_result}"
+        else:
+            tool_result = web_result
 
     # Phase 3 — generate answer
     # If web search failed/empty → use LLM's own pizza knowledge (always works)

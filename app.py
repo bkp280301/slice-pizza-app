@@ -102,7 +102,7 @@ div[class*="stMarkdown"] {
     background: #0a0400 !important;
 }
 
-/* Sidebar open/close toggle — always visible */
+/* Sidebar open/close toggle — always visible, arrow icon only */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"] {
     display: flex !important;
@@ -111,6 +111,15 @@ div[class*="stMarkdown"] {
     z-index: 9999 !important;
     background: #1c0a00 !important;
     border-radius: 8px !important;
+}
+/* Hide "keyboard_double" / Material Icon text, keep only SVG arrow */
+[data-testid="stSidebarCollapsedControl"] button span,
+[data-testid="stSidebarCollapsedControl"] button p,
+[data-testid="collapsedControl"] button span,
+[data-testid="collapsedControl"] button p,
+[data-testid="stSidebarCollapsedControl"] [data-testid="stIconMaterial"],
+[data-testid="collapsedControl"] [data-testid="stIconMaterial"] {
+    display: none !important;
 }
 [data-testid="stSidebarCollapsedControl"] svg,
 [data-testid="collapsedControl"] svg,

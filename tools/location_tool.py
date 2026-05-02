@@ -183,7 +183,7 @@ def run(place_name: str) -> str:
 
     # ── 3. Overpass nearby search (if we have coordinates) ────────────────────
     if ref_lat is not None:
-        elements = _overpass_nearby(ref_lat, ref_lon, keyword, radius_m=8000)
+        elements = _overpass_nearby(ref_lat, ref_lon, keyword, radius_m=10000)
         if elements:
             lines = [f"Nearest '{keyword}' results near {ref_name} (sorted by distance):\n"]
             for el in elements[:5]:
@@ -208,39 +208,13 @@ def run(place_name: str) -> str:
                     f"  Status  : {status}\n"
                 )
             return "\n".join(lines)
+        # Overpass found nothing near the user — do NOT fall back to global Nominatim
+        # (it ignores location and returns any matching place in the world).
+        # Return empty so agent.py triggers a targeted web search instead.
+        return ""
 
-    # ── 4. Fallback: plain Nominatim text search ───────────────────────────────
-    try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": place_name, "format": "json", "limit": 5, "addressdetails": 1, "extratags": 1},
-            headers={"User-Agent": config.HTTP_USER_AGENT},
-            timeout=config.HTTP_TIMEOUT,
-        )
-        resp.raise_for_status()
-        places = resp.json()
-    except Exception as e:
-        return f"Location lookup failed: {e}"
-
-    if not places:
-        return f"No location found for '{place_name}'. Try adding a city or country name."
-
-    results = []
-    for place in places[:3]:
-        name      = place.get("display_name", "Unknown")
-        extra     = place.get("extratags") or {}
-        phone     = extra.get("phone") or extra.get("contact:phone", "N/A")
-        website   = extra.get("website") or extra.get("contact:website", "N/A")
-        hours_raw = extra.get("opening_hours", "")
-        status    = _check_open_status(hours_raw) if hours_raw else "Hours not listed"
-        results.append(
-            f"Place   : {name}\n"
-            f"Phone   : {phone}\n"
-            f"Website : {website}\n"
-            f"Hours   : {hours_raw or 'Not listed'}\n"
-            f"Status  : {status}"
-        )
-    return "\n\n---\n\n".join(results)
+    # ── 4. No reference coords — return empty to let agent do web search ──────
+    return ""
 
 
 # ── Hours parsing ──────────────────────────────────────────────────────────────
