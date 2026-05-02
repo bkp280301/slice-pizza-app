@@ -4,12 +4,39 @@ Run: streamlit run app.py --server.address 0.0.0.0
 """
 
 import uuid
+import requests
 from datetime import datetime
 
 import streamlit as st
 
+try:
+    from streamlit_js_eval import get_geolocation
+    _GEO_AVAILABLE = True
+except ImportError:
+    _GEO_AVAILABLE = False
+
 import config
 from agent import run_agent_stream
+
+
+def _reverse_geocode(lat: float, lon: float) -> str:
+    """Convert GPS coordinates to a human-readable city string."""
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers={"User-Agent": config.HTTP_USER_AGENT},
+            timeout=6,
+        )
+        data = r.json()
+        addr = data.get("address", {})
+        city    = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county", "")
+        state   = addr.get("state", "")
+        country = addr.get("country", "")
+        parts   = [p for p in [city, state, country] if p]
+        return ", ".join(parts[:2]) if parts else f"{lat:.4f},{lon:.4f}"
+    except Exception:
+        return f"{lat:.4f},{lon:.4f}"
 
 st.set_page_config(
     page_title="SLICE — Pizza Intelligence",
@@ -515,22 +542,51 @@ with st.sidebar:
     _sep()
     # ── My Location ──
     _label("📍 My Location")
-    st.markdown(
-        '<p style="color:#5a2e00;font-size:11px;line-height:1.6;margin:0 0 6px;padding:0 2px;">'
-        'Set your city or ZIP so "near me" finds the right places.</p>',
-        unsafe_allow_html=True,
-    )
-    user_loc = st.text_input(
-        "Your location",
-        value=st.session_state.get("user_location", ""),
-        placeholder="e.g. Chennai, India  or  10001",
-        key="loc_input",
-        label_visibility="collapsed",
-    )
-    if user_loc != st.session_state.get("user_location", ""):
-        st.session_state.user_location = user_loc.strip()
-        if user_loc.strip():
-            st.success(f"📍 Location set to: {user_loc.strip()}")
+
+    saved_loc = st.session_state.get("user_location", "")
+
+    if saved_loc:
+        st.markdown(
+            f'<div style="background:#1c0a00;border:1px solid #3a1a00;border-radius:9px;'
+            f'padding:9px 12px;margin-bottom:8px;font-size:13px;color:#f4a261;">'
+            f'📍 {saved_loc}</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("🔄  Update Location", key="update_loc", use_container_width=True):
+            st.session_state.user_location = ""
+            st.session_state.pop("_geo_fetched", None)
+            st.rerun()
+    else:
+        # Try browser GPS automatically
+        if _GEO_AVAILABLE and not st.session_state.get("_geo_fetched"):
+            st.markdown(
+                '<p style="color:#5a2e00;font-size:11px;line-height:1.5;margin:0 0 6px;">'
+                'Allow location access for accurate "near me" results.</p>',
+                unsafe_allow_html=True,
+            )
+            geo = get_geolocation()
+            st.session_state["_geo_fetched"] = True
+            if geo and geo.get("coords"):
+                lat = geo["coords"]["latitude"]
+                lon = geo["coords"]["longitude"]
+                city = _reverse_geocode(lat, lon)
+                st.session_state.user_location = city
+                st.rerun()
+
+        # Manual fallback input
+        st.markdown(
+            '<p style="color:#5a2e00;font-size:11px;line-height:1.5;margin:0 0 4px;">'
+            'Or type your city / ZIP:</p>',
+            unsafe_allow_html=True,
+        )
+        manual = st.text_input(
+            "loc", placeholder="e.g. Chennai, India  or  10001",
+            key="loc_manual", label_visibility="collapsed",
+        )
+        if st.button("📍  Set Location", key="set_loc", use_container_width=True):
+            if manual.strip():
+                st.session_state.user_location = manual.strip()
+                st.rerun()
 
     _sep()
     # ── Settings ──

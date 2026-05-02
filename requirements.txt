@@ -3,3 +3,4 @@ duckduckgo-search>=6.1.0
 beautifulsoup4>=4.12.0
 requests>=2.31.0
 streamlit>=1.35.0
+streamlit-js-eval>=0.1.7
