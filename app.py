@@ -89,12 +89,12 @@ div[class*="stMarkdown"] {
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"] { display:none !important; }
 
-/* Hide header bar but keep sidebar toggle visible */
+/* Hide header bar content but keep sidebar toggle */
 [data-testid="stHeader"] {
     background: transparent !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    overflow: visible !important;
+}
+[data-testid="stHeader"] > div:not([data-testid="stSidebarCollapsedControl"]):not([data-testid="collapsedControl"]) {
+    display: none !important;
 }
 
 /* Sidebar open/close toggle — always visible */
@@ -103,10 +103,6 @@ div[class*="stMarkdown"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    background: #1c0a00 !important;
-    border: 1px solid #3a1a00 !important;
-    border-radius: 8px !important;
-    color: #f4a261 !important;
     z-index: 9999 !important;
 }
 [data-testid="stSidebarCollapsedControl"] svg,
@@ -301,8 +297,6 @@ div[class*="stChatInputContainer"] > div {
 [data-testid="stException"],
 [data-testid="stException"] * { display: none !important; }
 footer, [class*="footer"] { display: none !important; }
-    box-shadow: none !important;
-}
 
 /* ── 14. EXPANDER ── */
 [data-testid="stExpander"],
