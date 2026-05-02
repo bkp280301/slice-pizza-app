@@ -429,6 +429,18 @@ def _sep():
     st.markdown('<hr style="border-top:1px solid #1e0c00;margin:10px 0;">', unsafe_allow_html=True)
 
 
+def _inject_location(query: str) -> str:
+    """Replace 'near me' with the user's saved location if set."""
+    loc = st.session_state.get("user_location", "").strip()
+    if not loc:
+        return query
+    import re
+    return re.sub(
+        r'\b(near me|nearby|around me|closest to me|nearest|near my location)\b',
+        f"near {loc}", query, flags=re.IGNORECASE
+    )
+
+
 def _label(txt: str):
     st.markdown(
         f'<p style="color:#3a1a00;font-size:10px;font-weight:700;letter-spacing:2px;'
@@ -501,7 +513,27 @@ with st.sidebar:
         st.caption("No chats yet")
 
     _sep()
-    # ── Settings — no expander to avoid arrow-text glitch ──
+    # ── My Location ──
+    _label("📍 My Location")
+    st.markdown(
+        '<p style="color:#5a2e00;font-size:11px;line-height:1.6;margin:0 0 6px;padding:0 2px;">'
+        'Set your city or ZIP so "near me" finds the right places.</p>',
+        unsafe_allow_html=True,
+    )
+    user_loc = st.text_input(
+        "Your location",
+        value=st.session_state.get("user_location", ""),
+        placeholder="e.g. Chennai, India  or  10001",
+        key="loc_input",
+        label_visibility="collapsed",
+    )
+    if user_loc != st.session_state.get("user_location", ""):
+        st.session_state.user_location = user_loc.strip()
+        if user_loc.strip():
+            st.success(f"📍 Location set to: {user_loc.strip()}")
+
+    _sep()
+    # ── Settings ──
     _label("Settings")
 
     new_key = st.text_input(
@@ -642,8 +674,11 @@ def render_chat():
                 unsafe_allow_html=True,
             )
 
+        # Replace "near me" with the user's actual saved location
+        enriched_input = _inject_location(user_input)
+
         for chunk in run_agent_stream(
-            user_message=user_input,
+            user_message=enriched_input,
             chat_history=history,
             groq_api_key=config.GROQ_API_KEY,
             on_tool_call=on_tool,
@@ -702,7 +737,7 @@ def render_find_pizza():
             result_box = st.empty()
             chunks: list[str] = []
             with st.spinner("Finding pizza near you…"):
-                for chunk in run_agent_stream(user_message=query, groq_api_key=config.GROQ_API_KEY):
+                for chunk in run_agent_stream(user_message=_inject_location(query), groq_api_key=config.GROQ_API_KEY):
                     chunks.append(chunk)
                     result_box.markdown("".join(chunks))
 
