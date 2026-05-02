@@ -89,12 +89,10 @@ div[class*="stMarkdown"] {
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"] { display:none !important; }
 
-/* Hide header bar content but keep sidebar toggle */
+/* Header: transparent only — stToolbar/stDecoration are hidden above */
 [data-testid="stHeader"] {
     background: transparent !important;
-}
-[data-testid="stHeader"] > div:not([data-testid="stSidebarCollapsedControl"]):not([data-testid="collapsedControl"]) {
-    display: none !important;
+    border-bottom: none !important;
 }
 
 /* Sidebar open/close toggle — always visible */
