@@ -84,15 +84,22 @@ div[class*="stMarkdown"] {
 }
 
 /* ── 3. HIDE STREAMLIT CHROME ── */
+/* DO NOT hide stToolbar — it contains the sidebar toggle button in Streamlit 1.35+ */
 #MainMenu, footer,
-[data-testid="stToolbar"],
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"] { display:none !important; }
 
-/* Header: transparent only — stToolbar/stDecoration are hidden above */
-[data-testid="stHeader"] {
-    background: transparent !important;
+/* Header: match app background so toolbar blends in, but stays functional */
+[data-testid="stHeader"],
+[data-testid="stHeader"] > div {
+    background: #0a0400 !important;
     border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+/* Toolbar: dark background so it's not jarring */
+[data-testid="stToolbar"] {
+    background: #0a0400 !important;
 }
 
 /* Sidebar open/close toggle — always visible */
@@ -102,9 +109,12 @@ div[class*="stMarkdown"] {
     visibility: visible !important;
     opacity: 1 !important;
     z-index: 9999 !important;
+    background: #1c0a00 !important;
+    border-radius: 8px !important;
 }
 [data-testid="stSidebarCollapsedControl"] svg,
-[data-testid="collapsedControl"] svg { fill: #f4a261 !important; }
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapsedControl"] button svg { fill: #f4a261 !important; }
 
 /* ── 4. HIDE RADIO WIDGET ── */
 [data-testid="stRadio"] { display:none !important; }
