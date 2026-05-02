@@ -3,6 +3,7 @@ app.py — SLICE: Your Pizza Intelligence Assistant
 Run: streamlit run app.py --server.address 0.0.0.0
 """
 
+import re
 import uuid
 import requests
 from datetime import datetime
@@ -83,11 +84,33 @@ div[class*="stMarkdown"] {
 }
 
 /* ── 3. HIDE STREAMLIT CHROME ── */
-#MainMenu, footer, header,
+#MainMenu, footer,
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
-[data-testid="stHeader"],
 [data-testid="stStatusWidget"] { display:none !important; }
+
+/* Hide header bar but keep sidebar toggle visible */
+[data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+/* Sidebar open/close toggle — always visible */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: #1c0a00 !important;
+    border: 1px solid #3a1a00 !important;
+    border-radius: 8px !important;
+    color: #f4a261 !important;
+    z-index: 9999 !important;
+}
+[data-testid="stSidebarCollapsedControl"] svg,
+[data-testid="collapsedControl"] svg { fill: #f4a261 !important; }
 
 /* ── 4. HIDE RADIO WIDGET ── */
 [data-testid="stRadio"] { display:none !important; }
@@ -457,15 +480,22 @@ def _sep():
 
 
 def _inject_location(query: str) -> str:
-    """Replace 'near me' with the user's saved location if set."""
+    """Append or replace location in query using user's saved location."""
     loc = st.session_state.get("user_location", "").strip()
     if not loc:
         return query
-    import re
-    return re.sub(
-        r'\b(near me|nearby|around me|closest to me|nearest|near my location)\b',
+    # Replace "near me" phrases exactly — NOT the word "nearest"
+    result = re.sub(
+        r'\b(near me|nearby|around me|closest to me|near my location|to me|for me)\b',
         f"near {loc}", query, flags=re.IGNORECASE
     )
+    # If nothing replaced but query has location intent, append location
+    if result == query and re.search(
+        r'\b(nearest|closest|find|where is|open now|delivery|restaurant|pizza place|near)\b',
+        query, re.IGNORECASE
+    ):
+        result = f"{query} near {loc}"
+    return result
 
 
 def _label(txt: str):
@@ -698,11 +728,13 @@ def render_chat():
         ]
         cols = st.columns(2)
         for i, (icon, text) in enumerate(suggestions):
+            # Use a form-submit pattern so the value is captured reliably
             if cols[i % 2].button(f"{icon}  {text}", key=f"sg{i}", use_container_width=True):
                 st.session_state["_q"] = text
-                st.rerun()
 
-    user_input = st.session_state.pop("_q", None) or st.chat_input("Ask anything about pizza…")
+    # Pick up suggestion click OR typed message
+    _queued = st.session_state.pop("_q", None)
+    user_input = _queued or st.chat_input("Ask anything about pizza…")
     if not user_input:
         return
 
