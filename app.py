@@ -9,6 +9,7 @@ import requests
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as _components
 
 try:
     from streamlit_js_eval import get_geolocation
@@ -1001,142 +1002,186 @@ def render_calculator():
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FLOATING AI CHAT WIDGET  (bottom-right corner, every page)
+# Uses components.v1.html so JavaScript actually executes; injects into parent DOM
 # ═══════════════════════════════════════════════════════════════════════════════
 def _floating_chat():
     api_key = config.GROQ_API_KEY or ""
     model   = getattr(config, "GROQ_MODEL", "llama-3.3-70b-versatile")
-    st.markdown(f"""
-<style>
-#pz-fab{{position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}}
-#pz-btn{{width:62px;height:62px;border-radius:50%;background:linear-gradient(135deg,#c0392b,#e07840);border:none;
-  cursor:pointer;box-shadow:0 4px 22px rgba(192,57,43,.55);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}}
-#pz-btn:hover{{transform:scale(1.09);box-shadow:0 6px 28px rgba(192,57,43,.75);}}
-#pz-btn .pz-ico{{font-size:26px;line-height:1;}}
-#pz-btn .pz-lbl{{font-size:7.5px;font-weight:800;letter-spacing:1.2px;color:#fff;margin-top:1px;}}
-#pz-panel{{display:none;width:340px;height:500px;background:#110600;border:1px solid #3a1a00;
-  border-radius:18px;box-shadow:0 10px 48px rgba(0,0,0,.7);flex-direction:column;overflow:hidden;}}
-#pz-panel.open{{display:flex;}}
-#pz-hdr{{background:linear-gradient(135deg,#c0392b,#e07840);padding:14px 16px;display:flex;
-  align-items:center;justify-content:space-between;}}
-#pz-hdr-left{{display:flex;align-items:center;gap:10px;}}
-#pz-hdr-ico{{font-size:22px;}}
-#pz-hdr-text{{display:flex;flex-direction:column;}}
-#pz-hdr-name{{font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}}
-#pz-hdr-sub{{font-size:10px;color:rgba(255,255,255,.75);letter-spacing:.5px;}}
-#pz-x{{background:transparent;border:none;color:rgba(255,255,255,.85);font-size:20px;
-  cursor:pointer;padding:0 2px;line-height:1;}}
-#pz-x:hover{{color:#fff;}}
-#pz-msgs{{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;
-  scrollbar-width:thin;scrollbar-color:#3a1a00 transparent;}}
-.pz-msg{{max-width:86%;padding:10px 14px;border-radius:14px;font-size:13.5px;line-height:1.65;word-wrap:break-word;}}
-.pz-user{{background:linear-gradient(135deg,#c0392b,#e07840);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}}
-.pz-bot{{background:#1c0a00;color:#f0e0cc;align-self:flex-start;border:1px solid #2d1500;border-bottom-left-radius:4px;}}
-.pz-dots{{display:flex;gap:5px;padding:10px 14px;background:#1c0a00;border:1px solid #2d1500;
-  border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;}}
-.pz-dot{{width:7px;height:7px;background:#f4a261;border-radius:50%;animation:pzb 1.1s infinite;}}
-.pz-dot:nth-child(2){{animation-delay:.2s;}}.pz-dot:nth-child(3){{animation-delay:.4s;}}
-@keyframes pzb{{0%,80%,100%{{transform:translateY(0)}}40%{{transform:translateY(-7px)}}}}
-#pz-foot{{padding:11px;border-top:1px solid #1e0c00;background:#0a0400;display:flex;gap:8px;}}
-#pz-inp{{flex:1;background:#1c0a00;border:1px solid #3a1a00;border-radius:10px;color:#f0e0cc;
-  padding:9px 13px;font-size:13.5px;outline:none;font-family:inherit;}}
-#pz-inp:focus{{border-color:#c0392b;}}
-#pz-inp::placeholder{{color:#4a2800;}}
-#pz-send{{background:linear-gradient(135deg,#c0392b,#e07840);border:none;border-radius:10px;
-  color:#fff;width:40px;font-size:17px;cursor:pointer;flex-shrink:0;}}
-#pz-send:hover{{opacity:.87;}}
-</style>
+    # st.markdown strips <script> tags — use components.v1.html which injects into parent DOM
+    _components.html(f"""<!DOCTYPE html><html><body><script>
+(function(){{
+  // Always refresh key/model in case user updated them
+  window.parent.PZ_KEY   = "{api_key}";
+  window.parent.PZ_MODEL = "{model}";
 
-<div id="pz-fab">
-  <div id="pz-panel">
-    <div id="pz-hdr">
-      <div id="pz-hdr-left">
-        <span id="pz-hdr-ico">🍕</span>
-        <div id="pz-hdr-text">
-          <span id="pz-hdr-name">SLICE AI</span>
-          <span id="pz-hdr-sub">YOUR PIZZA EXPERT</span>
+  if(window.parent.document.getElementById('pz-fab')) return; // already injected
+
+  /* ── STYLES ── */
+  var s=window.parent.document.createElement('style');
+  s.textContent=`
+    #pz-fab{{position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;align-items:flex-end;gap:10px;font-family:'Segoe UI',system-ui,sans-serif;}}
+    #pz-panel{{display:none;width:340px;height:500px;background:#110600;border:1px solid #3a1a00;border-radius:18px;box-shadow:0 10px 50px rgba(0,0,0,.75);flex-direction:column;overflow:hidden;}}
+    #pz-panel.open{{display:flex;}}
+    #pz-hdr{{background:linear-gradient(135deg,#c0392b,#e07840);padding:12px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px;}}
+    #pz-hdr-info{{display:flex;flex-direction:column;}}
+    #pz-hdr-name{{font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}}
+    #pz-hdr-sub{{font-size:9.5px;color:rgba(255,255,255,.8);letter-spacing:.8px;text-transform:uppercase;}}
+    #pz-x{{background:transparent;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer;line-height:1;padding:0;}}
+    #pz-x:hover{{color:#fff;}}
+    #pz-msgs{{flex:1;overflow-y:auto;padding:13px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:#3a1a00 transparent;}}
+    .pz-m{{max-width:87%;padding:10px 13px;border-radius:14px;font-size:13.5px;line-height:1.65;word-wrap:break-word;}}
+    .pz-u{{background:linear-gradient(135deg,#c0392b,#e07840);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}}
+    .pz-b{{background:#1c0a00;color:#f0e0cc;align-self:flex-start;border:1px solid #2d1500;border-bottom-left-radius:4px;}}
+    .pz-dots{{display:flex;gap:5px;padding:10px 14px;background:#1c0a00;border:1px solid #2d1500;border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;}}
+    .pz-dot{{width:7px;height:7px;background:#f4a261;border-radius:50%;animation:pzb 1.1s infinite;}}
+    .pz-dot:nth-child(2){{animation-delay:.2s;}}.pz-dot:nth-child(3){{animation-delay:.4s;}}
+    @keyframes pzb{{0%,80%,100%{{transform:translateY(0)}}40%{{transform:translateY(-8px)}}}}
+    #pz-foot{{padding:10px;border-top:1px solid #1e0c00;background:#0a0400;display:flex;gap:8px;}}
+    #pz-inp{{flex:1;background:#1c0a00;border:1px solid #3a1a00;border-radius:10px;color:#f0e0cc;padding:9px 12px;font-size:13.5px;outline:none;font-family:inherit;}}
+    #pz-inp:focus{{border-color:#c0392b;}}
+    #pz-inp::placeholder{{color:#4a2800;}}
+    #pz-send{{background:linear-gradient(135deg,#c0392b,#e07840);border:none;border-radius:10px;color:#fff;width:40px;font-size:17px;cursor:pointer;}}
+    #pz-send:hover{{opacity:.87;}}
+    #pz-btn{{width:68px;height:78px;background:none;border:none;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;gap:3px;filter:drop-shadow(0 4px 14px rgba(192,57,43,.6));transition:transform .2s,filter .2s;}}
+    #pz-btn:hover{{transform:scale(1.08);filter:drop-shadow(0 6px 20px rgba(192,57,43,.85));}}
+    #pz-lbl{{font-size:9px;font-weight:800;letter-spacing:1.5px;color:#f4a261;text-align:center;background:#110600;border:1px solid #3a1a00;border-radius:6px;padding:2px 6px;}}
+  `;
+  window.parent.document.head.appendChild(s);
+
+  /* ── ROBOT SVG BUTTON ── */
+  var botSvg=`<svg width="68" height="68" viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="pbg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#c0392b"/><stop offset="100%" stop-color="#e07840"/>
+      </linearGradient>
+    </defs>
+    <!-- Pizza body circle -->
+    <circle cx="34" cy="38" r="28" fill="url(#pbg)"/>
+    <!-- Crust ring -->
+    <circle cx="34" cy="38" r="28" fill="none" stroke="#8B2500" stroke-width="5" stroke-dasharray="3 4" opacity="0.5"/>
+    <!-- Antenna pole -->
+    <rect x="32" y="6" width="4" height="12" rx="2" fill="#ffd180"/>
+    <!-- Antenna ball -->
+    <circle cx="34" cy="5" r="5.5" fill="#ffd180"/>
+    <circle cx="34" cy="5" r="2.5" fill="#c0392b"/>
+    <!-- Robot face plate -->
+    <rect x="13" y="20" width="42" height="30" rx="7" fill="rgba(0,0,0,0.22)"/>
+    <!-- Eyes white -->
+    <rect x="16" y="24" width="13" height="11" rx="3" fill="white"/>
+    <rect x="39" y="24" width="13" height="11" rx="3" fill="white"/>
+    <!-- Eye pupils (LED red) -->
+    <circle cx="22.5" cy="29.5" r="4" fill="#c0392b"/>
+    <circle cx="45.5" cy="29.5" r="4" fill="#c0392b"/>
+    <!-- Eye shine -->
+    <circle cx="21" cy="28" r="1.5" fill="white" opacity="0.75"/>
+    <circle cx="44" cy="28" r="1.5" fill="white" opacity="0.75"/>
+    <!-- Smile -->
+    <path d="M20 40 Q34 50 48 40" stroke="white" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+    <!-- Pepperoni dots on body -->
+    <circle cx="27" cy="52" r="2.8" fill="#7a1a00" opacity="0.55"/>
+    <circle cx="38" cy="54" r="2.2" fill="#7a1a00" opacity="0.55"/>
+    <circle cx="46" cy="50" r="2" fill="#7a1a00" opacity="0.55"/>
+    <!-- Chat bubble badge -->
+    <circle cx="56" cy="18" r="10" fill="#ffd180"/>
+    <text x="56" y="22" text-anchor="middle" font-size="11" fill="#c0392b">💬</text>
+  </svg>`;
+
+  /* ── HTML ── */
+  var d=window.parent.document.createElement('div');
+  d.id='pz-fab';
+  d.innerHTML=`
+    <div id="pz-panel">
+      <div id="pz-hdr">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:26px;">🤖</span>
+          <div id="pz-hdr-info">
+            <span id="pz-hdr-name">PIZZABOT</span>
+            <span id="pz-hdr-sub">🍕 Your AI Pizza Expert</span>
+          </div>
         </div>
+        <button id="pz-x">✕</button>
       </div>
-      <button id="pz-x" onclick="pzToggle()">✕</button>
+      <div id="pz-msgs">
+        <div class="pz-m pz-b">Hey! I'm <b>PIZZABOT</b> 🤖🍕<br>Your AI pizza expert — ask me anything! Recipes, chains, calories, toppings, history — I know it all!</div>
+      </div>
+      <div id="pz-foot">
+        <input id="pz-inp" type="text" placeholder="Ask me anything about pizza…">
+        <button id="pz-send">➤</button>
+      </div>
     </div>
-    <div id="pz-msgs">
-      <div class="pz-msg pz-bot">Hey there! 🍕 I'm <b>SLICE AI</b> — your personal pizza expert.<br>Ask me anything: recipes, nutrition, nearest chains, toppings, history!</div>
-    </div>
-    <div id="pz-foot">
-      <input id="pz-inp" type="text" placeholder="Ask me anything about pizza…" onkeypress="if(event.key==='Enter')pzSend()">
-      <button id="pz-send" onclick="pzSend()">➤</button>
-    </div>
-  </div>
-  <button id="pz-btn" onclick="pzToggle()" title="Ask SLICE AI">
-    <span class="pz-ico">🍕</span>
-    <span class="pz-lbl">SLICE AI</span>
-  </button>
-</div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <button id="pz-btn">`+botSvg+`</button>
+      <span id="pz-lbl">PIZZABOT</span>
+    </div>`;
+  window.parent.document.body.appendChild(d);
 
-<script>
-const PZ_KEY   = "{api_key}";
-const PZ_MODEL = "{model}";
-const PZ_SYS   = "You are SLICE — an enthusiastic, knowledgeable pizza expert AI. Answer all pizza questions thoroughly and engagingly: recipes, chains, locations, nutrition, history, toppings, styles, tips. Give real, specific, useful information. Format nicely with bullet points or numbered steps when helpful. End every answer with 🍕 Enjoy your slice!";
+  /* ── LOGIC ── */
+  var p=window.parent;
+  p.document.getElementById('pz-x').onclick   = function(){{p.pzToggle();}};
+  p.document.getElementById('pz-btn').onclick  = function(){{p.pzToggle();}};
+  p.document.getElementById('pz-send').onclick = function(){{p.pzSend();}};
+  p.document.getElementById('pz-inp').onkeypress = function(e){{if(e.key==='Enter') p.pzSend();}};
 
-function pzToggle(){{
-  const p=document.getElementById('pz-panel');
-  p.classList.toggle('open');
-  if(p.classList.contains('open')) document.getElementById('pz-inp').focus();
-}}
+  p.pzToggle=function(){{
+    var panel=p.document.getElementById('pz-panel');
+    panel.classList.toggle('open');
+    if(panel.classList.contains('open')) p.document.getElementById('pz-inp').focus();
+  }};
 
-function pzAdd(text,cls){{
-  const box=document.getElementById('pz-msgs');
-  const d=document.createElement('div');
-  d.className='pz-msg '+cls;
-  d.innerHTML=text;
-  box.appendChild(d);
-  box.scrollTop=box.scrollHeight;
-  return d;
-}}
+  p.pzAdd=function(text,cls){{
+    var box=p.document.getElementById('pz-msgs');
+    var el=p.document.createElement('div');
+    el.className='pz-m '+cls;
+    el.innerHTML=text;
+    box.appendChild(el);
+    box.scrollTop=box.scrollHeight;
+  }};
 
-function pzTyping(){{
-  const box=document.getElementById('pz-msgs');
-  const d=document.createElement('div');
-  d.className='pz-dots'; d.id='pz-typing';
-  d.innerHTML='<div class="pz-dot"></div><div class="pz-dot"></div><div class="pz-dot"></div>';
-  box.appendChild(d); box.scrollTop=box.scrollHeight;
-}}
+  p.pzTyping=function(){{
+    var box=p.document.getElementById('pz-msgs');
+    var el=p.document.createElement('div');
+    el.className='pz-dots'; el.id='pz-typing';
+    el.innerHTML='<div class="pz-dot"></div><div class="pz-dot"></div><div class="pz-dot"></div>';
+    box.appendChild(el); box.scrollTop=box.scrollHeight;
+  }};
 
-function pzKillTyping(){{
-  const t=document.getElementById('pz-typing');
-  if(t) t.remove();
-}}
-
-async function pzSend(){{
-  const inp=document.getElementById('pz-inp');
-  const msg=inp.value.trim();
-  if(!msg) return;
-  inp.value='';
-  pzAdd(msg,'pz-user');
-  pzTyping();
-  if(!PZ_KEY){{pzKillTyping();pzAdd('⚠️ No API key set. Add your Groq key in Settings (sidebar).','pz-bot');return;}}
-  try{{
-    const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{{
-      method:'POST',
-      headers:{{'Content-Type':'application/json','Authorization':'Bearer '+PZ_KEY}},
-      body:JSON.stringify({{
-        model:PZ_MODEL,
-        messages:[{{role:'system',content:PZ_SYS}},{{role:'user',content:msg}}],
-        max_tokens:600,
-        temperature:0.5
-      }})
-    }});
-    const data=await r.json();
-    const reply=data.choices?.[0]?.message?.content || 'Sorry, I could not answer that.';
-    pzKillTyping();
-    pzAdd(reply.replace(/\\n/g,'<br>').replace(/\\*\\*(.*?)\\*\\*/g,'<b>$1</b>'),'pz-bot');
-  }}catch(e){{
-    pzKillTyping();
-    pzAdd('Connection error — please try again.','pz-bot');
-  }}
-}}
-</script>
-""", unsafe_allow_html=True)
+  p.pzSend=async function(){{
+    var inp=p.document.getElementById('pz-inp');
+    var msg=inp.value.trim();
+    if(!msg) return;
+    inp.value='';
+    p.pzAdd(msg,'pz-u');
+    p.pzTyping();
+    var key=p.PZ_KEY, model=p.PZ_MODEL;
+    if(!key){{
+      p.document.getElementById('pz-typing').remove();
+      p.pzAdd('⚠️ No API key — add your Groq key in Settings (sidebar).','pz-b');
+      return;
+    }}
+    try{{
+      var res=await fetch('https://api.groq.com/openai/v1/chat/completions',{{
+        method:'POST',
+        headers:{{'Content-Type':'application/json','Authorization':'Bearer '+key}},
+        body:JSON.stringify({{
+          model:model,
+          messages:[
+            {{role:'system',content:'You are PIZZABOT — an enthusiastic pizza expert AI. Answer ALL pizza questions thoroughly: recipes, chains, locations, nutrition, history, toppings, styles. Give real, specific, useful answers. Format with bullet points when helpful. End with 🍕 Enjoy your slice!'}},
+            {{role:'user',content:msg}}
+          ],
+          max_tokens:600, temperature:0.5
+        }})
+      }});
+      var data=await res.json();
+      var reply=data.choices&&data.choices[0]?data.choices[0].message.content:'Sorry, could not get answer.';
+      var t=p.document.getElementById('pz-typing'); if(t) t.remove();
+      p.pzAdd(reply.replace(/\\n/g,'<br>').replace(/\\*\\*(.*?)\\*\\*/g,'<b>$1</b>'),'pz-b');
+    }}catch(e){{
+      var t=p.document.getElementById('pz-typing'); if(t) t.remove();
+      p.pzAdd('Connection error — try again.','pz-b');
+    }}
+  }};
+}})();
+</script></body></html>""", height=0, scrolling=False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
