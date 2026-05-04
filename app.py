@@ -612,6 +612,8 @@ with st.sidebar:
                 lon = geo["coords"]["longitude"]
                 city = _reverse_geocode(lat, lon)
                 st.session_state.user_location = city
+                st.session_state.user_lat = lat
+                st.session_state.user_lon = lon
                 st.rerun()
 
         # Manual fallback input
@@ -776,11 +778,16 @@ def render_chat():
         # Replace "near me" with the user's actual saved location
         enriched_input = _inject_location(user_input)
 
+        user_lat = st.session_state.get("user_lat")
+        user_lon = st.session_state.get("user_lon")
+        user_coords = (user_lat, user_lon) if user_lat and user_lon else None
+
         for chunk in run_agent_stream(
             user_message=enriched_input,
             chat_history=history,
             groq_api_key=config.GROQ_API_KEY,
             on_tool_call=on_tool,
+            user_coords=user_coords,
         ):
             chunks.append(chunk)
             answer_ph.markdown("".join(chunks))

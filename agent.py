@@ -164,6 +164,7 @@ def run_agent_stream(
     chat_history: list | None = None,
     groq_api_key: str | None = None,
     on_tool_call=None,
+    user_coords: tuple | None = None,
 ):
     api_key = groq_api_key or config.GROQ_API_KEY
     if not api_key:
@@ -199,27 +200,28 @@ def run_agent_stream(
     elif tool_name == "find_location":
         place_name = tool_args.get("place_name", user_message)
         if on_tool_call:
-            on_tool_call(f"Checking map data for \"{place_name}\"")
+            on_tool_call(f"Searching nearby locations…")
         try:
-            osm_result = TOOL_EXECUTORS["find_location"](tool_args)
+            # Pass real GPS coords if available — skips IP geolocation entirely
+            osm_result = location_tool.run(place_name, coords=user_coords)
         except Exception:
             osm_result = ""
 
-        # Always supplement with a targeted web search — chain store locators
-        # give far more accurate and up-to-date results than OSM data.
         business, location = _extract_business_and_location(user_message)
-        if not location:
+        # Use GPS city name for fallback label; never fall back to IP geolocation
+        # (IP resolves to server datacenter, not user's city)
+        if not location and user_coords:
             try:
-                location = location_tool.get_ip_location()
+                location = location_tool.get_city_from_coords(*user_coords)
             except Exception:
                 location = ""
-        web_query = f"{business} pizza near {location} address hours" if location else f"{business} pizza locations"
+
+        web_query = f"{business} pizza near {location} address hours" if location else f"{business} nearest pizza locations"
         if on_tool_call:
             on_tool_call(f"Searching web for \"{web_query}\"")
         web_result = _run_web_and_scrape(web_query, on_tool_call=on_tool_call)
 
         if osm_result and not _search_failed(osm_result):
-            # Merge OSM + web
             tool_result = osm_result
             if web_result and not _search_failed(web_result):
                 tool_result += f"\n\n---\nAdditional web results:\n{web_result}"
@@ -232,11 +234,11 @@ def run_agent_stream(
     elif tool_name == "find_location":
         # Location-specific fallback: list real chains + ordering apps, never say "use Google Maps"
         _, loc = _extract_business_and_location(user_message)
-        if not loc:
+        if not loc and user_coords:
             try:
-                loc = location_tool.get_ip_location()
+                loc = location_tool.get_city_from_coords(*user_coords)
             except Exception:
-                loc = "your area"
+                loc = ""
         prompt = LOCATION_FALLBACK_PROMPT.format(
             user_message=user_message,
             location=loc or "your area",

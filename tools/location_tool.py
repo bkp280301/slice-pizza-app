@@ -161,35 +161,55 @@ TOOL_DEFINITION = {
 }
 
 
+# ── City from coords (reverse geocode, no full address) ───────────────────────
+
+def get_city_from_coords(lat: float, lon: float) -> str:
+    """Return 'City, State' from GPS coordinates using Nominatim."""
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers={"User-Agent": config.HTTP_USER_AGENT},
+            timeout=6,
+        )
+        addr = r.json().get("address", {})
+        city  = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county", "")
+        state = addr.get("state", "")
+        return f"{city}, {state}" if city and state else city or f"{lat:.4f},{lon:.4f}"
+    except Exception:
+        return f"{lat:.4f},{lon:.4f}"
+
+
 # ── Main run function ──────────────────────────────────────────────────────────
 
-def run(place_name: str) -> str:
-    """Find places near a location and return results sorted by real distance."""
+def run(place_name: str, coords: tuple | None = None) -> str:
+    """Find places near a location and return results sorted by real distance.
 
+    Args:
+        place_name: Natural-language query e.g. "Domino's near Boston"
+        coords: Optional (lat, lon) from browser GPS — takes priority over all geocoding.
+    """
     query_lower = place_name.lower()
 
     # ── 1. Determine the reference point ──────────────────────────────────────
     ref_lat = ref_lon = ref_name = None
 
-    # Check for explicit zip code or address in the query
-    zip_match = re.search(r'\b(\d{5,6})\b', place_name)
-
-    if any(p in query_lower for p in ["near me", "nearby", "closest to me", "around me", "nearest"]):
-        coords = get_ip_coords()
-        if coords:
-            ref_lat, ref_lon = coords
-            ref_name = get_ip_location() or f"{ref_lat:.4f},{ref_lon:.4f}"
-        else:
-            city = get_ip_location()
-            if city:
-                gc = geocode(city)
-                if gc:
-                    ref_lat, ref_lon, ref_name = gc
-    elif zip_match or re.search(r'\bnear\s+(.+)', place_name, re.IGNORECASE):
-        loc_hint = zip_match.group(1) if zip_match else re.search(r'\bnear\s+(.+)', place_name, re.IGNORECASE).group(1)
-        gc = geocode(loc_hint)
-        if gc:
-            ref_lat, ref_lon, ref_name = gc
+    # Browser GPS coords take absolute priority — they're the user's real position
+    if coords and coords[0] and coords[1]:
+        ref_lat, ref_lon = float(coords[0]), float(coords[1])
+        ref_name = get_city_from_coords(ref_lat, ref_lon)
+    else:
+        # Check for explicit zip code or city in query
+        zip_match = re.search(r'\b(\d{5,6})\b', place_name)
+        if any(p in query_lower for p in ["near me", "nearby", "closest to me", "around me"]):
+            # Do NOT use IP geolocation — it returns server datacenter location.
+            # Without GPS coords we can't reliably find the user's position.
+            pass
+        elif zip_match or re.search(r'\bnear\s+(.+)', place_name, re.IGNORECASE):
+            loc_hint = zip_match.group(1) if zip_match else re.search(r'\bnear\s+(.+)', place_name, re.IGNORECASE).group(1)
+            gc = geocode(loc_hint)
+            if gc:
+                ref_lat, ref_lon, ref_name = gc
 
     # ── 2. Extract the business keyword (strip filler words) ──────────────────
     keyword = re.sub(
