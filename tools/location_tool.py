@@ -75,6 +75,58 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
+# ── Nominatim bounded search (fast, ~1s) ──────────────────────────────────────
+
+def _nominatim_bounded(lat: float, lon: float, keyword: str, radius_km: float = 8.0) -> str:
+    """Search Nominatim for keyword within a bounding box around lat/lon.
+    Much faster than Overpass. Returns formatted string or empty string."""
+    delta = radius_km / 111.0  # ~1 degree latitude = 111 km
+    viewbox = f"{lon-delta},{lat+delta},{lon+delta},{lat-delta}"
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": keyword,
+                "format": "json",
+                "limit": 5,
+                "viewbox": viewbox,
+                "bounded": 1,
+                "addressdetails": 1,
+                "extratags": 1,
+            },
+            headers={"User-Agent": config.HTTP_USER_AGENT},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        places = resp.json()
+    except Exception:
+        return ""
+
+    if not places:
+        return ""
+
+    lines = [f"Nearest '{keyword}' results (sorted by distance):\n"]
+    for p in places[:5]:
+        name     = p.get("display_name", keyword).split(",")[0]
+        address  = ", ".join(p.get("display_name", "").split(",")[1:4]).strip()
+        extra    = p.get("extratags") or {}
+        phone    = extra.get("phone") or extra.get("contact:phone", "N/A")
+        website  = extra.get("website") or extra.get("contact:website", "N/A")
+        hours    = extra.get("opening_hours", "")
+        status   = _check_open_status(hours) if hours else "Hours not listed"
+        plat, plon = float(p.get("lat", lat)), float(p.get("lon", lon))
+        dist_km  = _haversine(lat, lon, plat, plon)
+        lines.append(
+            f"• {name} — {dist_km:.1f} km away\n"
+            f"  Address : {address}\n"
+            f"  Phone   : {phone}\n"
+            f"  Website : {website}\n"
+            f"  Hours   : {hours or 'Not listed'}\n"
+            f"  Status  : {status}\n"
+        )
+    return "\n".join(lines)
+
+
 # ── Overpass nearby search ─────────────────────────────────────────────────────
 
 def _overpass_nearby(lat: float, lon: float, keyword: str, radius_m: int = 5000) -> list[dict]:
@@ -115,7 +167,7 @@ out body center;
         resp = requests.post(
             "https://overpass-api.de/api/interpreter",
             data={"data": query},
-            timeout=30,
+            timeout=12,
         )
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
@@ -211,18 +263,27 @@ def run(place_name: str, coords: tuple | None = None) -> str:
             if gc:
                 ref_lat, ref_lon, ref_name = gc
 
-    # ── 2. Extract the business keyword (strip filler words) ──────────────────
+    # ── 2. Extract the business keyword ──────────────────────────────────────
+    # Split on "near" and take everything BEFORE it as the business name.
+    # This correctly handles "Domino's near Boston, Massachusetts, United States"
+    # → keyword = "Domino's"  (the old word-by-word regex left "Massachusetts, United States")
+    parts = re.split(r'\bnear\b', place_name, maxsplit=1, flags=re.IGNORECASE)
+    keyword = parts[0]
     keyword = re.sub(
-        r'\b(nearest|find|near me|near\s+\S+|nearby|around me|closest to me|to this location|location|'
-        r'this location|in \d{5}|near \d{5})\b',
-        "", place_name, flags=re.IGNORECASE
+        r'\b(nearest|find|closest|get me|show me|where is|is there a|looking for)\s+',
+        '', keyword, flags=re.IGNORECASE
     ).strip(" ,")
-    # Also strip zip codes from keyword
-    keyword = re.sub(r'\b\d{5,6}\b', "", keyword).strip(" ,")
+    keyword = re.sub(r'\b\d{5,6}\b', '', keyword).strip(" ,")
     if not keyword:
-        keyword = place_name  # fallback
+        keyword = place_name
 
-    # ── 3. Overpass nearby search (if we have coordinates) ────────────────────
+    # ── 3. Quick Nominatim bounded search (fast — try before Overpass) ───────
+    if ref_lat is not None:
+        nominatim_result = _nominatim_bounded(ref_lat, ref_lon, keyword)
+        if nominatim_result:
+            return nominatim_result
+
+    # ── 4. Overpass nearby search (slower but more complete) ──────────────────
     if ref_lat is not None:
         elements = _overpass_nearby(ref_lat, ref_lon, keyword, radius_m=10000)
         if elements:

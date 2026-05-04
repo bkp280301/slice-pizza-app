@@ -202,37 +202,14 @@ def run_agent_stream(
         if on_tool_call:
             on_tool_call(f"Searching nearby locations…")
         try:
-            # Pass real GPS coords if available — skips IP geolocation entirely
-            osm_result = location_tool.run(place_name, coords=user_coords)
+            tool_result = location_tool.run(place_name, coords=user_coords)
         except Exception:
-            osm_result = ""
-
-        business, location = _extract_business_and_location(user_message)
-        # Use GPS city name for fallback label; never fall back to IP geolocation
-        # (IP resolves to server datacenter, not user's city)
-        if not location and user_coords:
-            try:
-                location = location_tool.get_city_from_coords(*user_coords)
-            except Exception:
-                location = ""
-
-        web_query = f"{business} pizza near {location} address hours" if location else f"{business} nearest pizza locations"
-        if on_tool_call:
-            on_tool_call(f"Searching web for \"{web_query}\"")
-        web_result = _run_web_and_scrape(web_query, on_tool_call=on_tool_call)
-
-        if osm_result and not _search_failed(osm_result):
-            tool_result = osm_result
-            if web_result and not _search_failed(web_result):
-                tool_result += f"\n\n---\nAdditional web results:\n{web_result}"
-        else:
-            tool_result = web_result
+            tool_result = ""
 
     # Phase 3 — generate answer
     if tool_result and not _search_failed(tool_result):
         prompt = ANSWER_PROMPT.format(user_message=user_message, tool_result=tool_result)
     elif tool_name == "find_location":
-        # Location-specific fallback: list real chains + ordering apps, never say "use Google Maps"
         _, loc = _extract_business_and_location(user_message)
         if not loc and user_coords:
             try:
