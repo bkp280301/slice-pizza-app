@@ -78,14 +78,36 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # ── Overpass nearby search ─────────────────────────────────────────────────────
 
 def _overpass_nearby(lat: float, lon: float, keyword: str, radius_m: int = 5000) -> list[dict]:
-    """Query Overpass API for OSM nodes/ways matching keyword near lat/lon."""
-    # Escape special regex chars in keyword
+    """Query Overpass API for pizza places near lat/lon.
+    Searches by name AND by cuisine/amenity tags so generic queries like 'pizza' work well.
+    """
     safe_kw = re.sub(r'[.*+?^${}()|[\]\\]', '', keyword)
-    query = f"""
-[out:json][timeout:20];
+    is_pizza_generic = re.search(r'\bpizza\b', keyword, re.IGNORECASE) and len(keyword.strip()) < 10
+
+    if is_pizza_generic:
+        # Broad search: any restaurant/fast_food with pizza cuisine, OR name matches
+        query = f"""
+[out:json][timeout:25];
+(
+  node(around:{radius_m},{lat},{lon})[amenity=restaurant][cuisine~"pizza",i];
+  node(around:{radius_m},{lat},{lon})[amenity=fast_food][cuisine~"pizza",i];
+  node(around:{radius_m},{lat},{lon})[shop=pizza];
+  node(around:{radius_m},{lat},{lon})[name~"{safe_kw}",i][amenity];
+  way(around:{radius_m},{lat},{lon})[amenity=restaurant][cuisine~"pizza",i];
+  way(around:{radius_m},{lat},{lon})[amenity=fast_food][cuisine~"pizza",i];
+  way(around:{radius_m},{lat},{lon})[name~"{safe_kw}",i][amenity];
+);
+out body center;
+"""
+    else:
+        # Specific chain search: match by name, also try cuisine fallback
+        query = f"""
+[out:json][timeout:25];
 (
   node(around:{radius_m},{lat},{lon})[name~"{safe_kw}",i];
   way(around:{radius_m},{lat},{lon})[name~"{safe_kw}",i];
+  node(around:{radius_m},{lat},{lon})[brand~"{safe_kw}",i];
+  way(around:{radius_m},{lat},{lon})[brand~"{safe_kw}",i];
 );
 out body center;
 """
@@ -93,14 +115,13 @@ out body center;
         resp = requests.post(
             "https://overpass-api.de/api/interpreter",
             data={"data": query},
-            timeout=25,
+            timeout=30,
         )
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
         results = []
         for el in elements:
             tags = el.get("tags", {})
-            # Get coordinates (nodes have lat/lon; ways have center)
             if el.get("type") == "node":
                 el_lat, el_lon = el.get("lat"), el.get("lon")
             else:

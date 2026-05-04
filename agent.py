@@ -61,6 +61,22 @@ If the question is NOT about pizza at all, say:
 
 User: {user_message}"""
 
+LOCATION_FALLBACK_PROMPT = """You are SLICE — a pizza expert AI.
+
+The user is looking for pizza near: {location}
+Live map data was unavailable, but use your knowledge to give a genuinely useful answer.
+
+DO NOT say "use Google Maps", "use Yelp", or "search online" — that is unhelpful.
+INSTEAD give:
+1. 5–6 major pizza chains very likely to have a location near {location} (Domino's, Pizza Hut, Papa John's, Little Caesars, Sbarro, etc.) — pick ones you know are common in that region
+2. For each chain: their **ordering app/website** (e.g. dominos.com, order.pizzahut.com) and phone ordering
+3. Whether the chain typically delivers or is dine-in/takeout
+4. Any well-known local or regional chains specific to that area if you know them
+
+Format as a bulleted list with **bold chain names**. End with: 🍕 Enjoy your slice!
+
+User asked: {user_message}"""
+
 
 def _search_failed(result: str) -> bool:
     """Return True if web search gave us nothing useful."""
@@ -211,11 +227,21 @@ def run_agent_stream(
             tool_result = web_result
 
     # Phase 3 — generate answer
-    # If web search failed/empty → use LLM's own pizza knowledge (always works)
     if tool_result and not _search_failed(tool_result):
         prompt = ANSWER_PROMPT.format(user_message=user_message, tool_result=tool_result)
+    elif tool_name == "find_location":
+        # Location-specific fallback: list real chains + ordering apps, never say "use Google Maps"
+        _, loc = _extract_business_and_location(user_message)
+        if not loc:
+            try:
+                loc = location_tool.get_ip_location()
+            except Exception:
+                loc = "your area"
+        prompt = LOCATION_FALLBACK_PROMPT.format(
+            user_message=user_message,
+            location=loc or "your area",
+        )
     else:
-        # LLM fallback — model knows a LOT about pizza from training data
         prompt = DIRECT_PROMPT.format(user_message=user_message)
 
     try:
