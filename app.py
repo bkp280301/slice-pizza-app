@@ -598,15 +598,16 @@ with st.sidebar:
             st.session_state.pop("_geo_fetched", None)
             st.rerun()
     else:
-        # Try browser GPS automatically
-        if _GEO_AVAILABLE and not st.session_state.get("_geo_fetched"):
+        # Try browser GPS — retry up to 5 times (permission dialog takes a render or two)
+        geo_tries = st.session_state.get("_geo_tries", 0)
+        if _GEO_AVAILABLE and not st.session_state.get("_geo_fetched") and geo_tries < 5:
             st.markdown(
                 '<p style="color:#5a2e00;font-size:11px;line-height:1.5;margin:0 0 6px;">'
                 'Allow location access for accurate "near me" results.</p>',
                 unsafe_allow_html=True,
             )
             geo = get_geolocation()
-            st.session_state["_geo_fetched"] = True
+            st.session_state["_geo_tries"] = geo_tries + 1
             if geo and geo.get("coords"):
                 lat = geo["coords"]["latitude"]
                 lon = geo["coords"]["longitude"]
@@ -614,7 +615,10 @@ with st.sidebar:
                 st.session_state.user_location = city
                 st.session_state.user_lat = lat
                 st.session_state.user_lon = lon
+                st.session_state["_geo_fetched"] = True
                 st.rerun()
+            # geo=None means permission not yet granted — do NOT set _geo_fetched,
+            # so it retries on the next render until the user responds
 
         # Manual fallback input
         st.markdown(
@@ -830,22 +834,35 @@ def render_find_pizza():
     cols = st.columns(len(chains))
     for i, chain in enumerate(chains):
         if cols[i].button(f"🍕 {chain}", key=f"ch{i}", use_container_width=True):
-            st.session_state["_search"] = f"nearest {chain} near me"
+            # Pre-fill the text input via session state key
+            st.session_state["fp_q"] = f"nearest {chain} near me"
 
     st.markdown("<br>", unsafe_allow_html=True)
+    # Use keyed text_input so chain buttons pre-fill it without clearing on rerun
     query = st.text_input(
         "Search any pizza place",
         placeholder="e.g.  Pizza Hut near 10001  or  best pizza near me",
-        value=st.session_state.pop("_search", ""),
+        key="fp_q",
     )
+
     if st.button("🍕  Search Now", key="fp_go", type="primary"):
-        if query:
+        search_q = query.strip()
+        if search_q:
+            fp_lat = st.session_state.get("user_lat")
+            fp_lon = st.session_state.get("user_lon")
+            fp_coords = (fp_lat, fp_lon) if fp_lat and fp_lon else None
             result_box = st.empty()
             chunks: list[str] = []
             with st.spinner("Finding pizza near you…"):
-                for chunk in run_agent_stream(user_message=_inject_location(query), groq_api_key=config.GROQ_API_KEY):
+                for chunk in run_agent_stream(
+                    user_message=_inject_location(search_q),
+                    groq_api_key=config.GROQ_API_KEY,
+                    user_coords=fp_coords,
+                ):
                     chunks.append(chunk)
                     result_box.markdown("".join(chunks))
+        else:
+            st.warning("Please enter a pizza place or chain to search.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

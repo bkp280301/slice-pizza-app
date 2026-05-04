@@ -77,30 +77,36 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 # ── Nominatim bounded search (fast, ~1s) ──────────────────────────────────────
 
-def _nominatim_bounded(lat: float, lon: float, keyword: str, radius_km: float = 8.0) -> str:
-    """Search Nominatim for keyword within a bounding box around lat/lon.
-    Much faster than Overpass. Returns formatted string or empty string."""
-    delta = radius_km / 111.0  # ~1 degree latitude = 111 km
+def _nominatim_bounded(lat: float, lon: float, keyword: str, radius_km: float = 10.0) -> str:
+    """Search Nominatim for keyword within a bounding box around lat/lon."""
+    delta = radius_km / 111.0
     viewbox = f"{lon-delta},{lat+delta},{lon+delta},{lat-delta}"
-    try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={
-                "q": keyword,
-                "format": "json",
-                "limit": 5,
-                "viewbox": viewbox,
-                "bounded": 1,
-                "addressdetails": 1,
-                "extratags": 1,
-            },
-            headers={"User-Agent": config.HTTP_USER_AGENT},
-            timeout=8,
-        )
-        resp.raise_for_status()
-        places = resp.json()
-    except Exception:
-        return ""
+    # Try both exact keyword and apostrophe-stripped version (Domino's → Dominos)
+    clean_kw = re.sub(r"['’‘]", "", keyword).strip()
+    queries_to_try = list(dict.fromkeys([keyword, clean_kw]))  # deduplicate
+    places = []
+    for q in queries_to_try:
+        try:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": q,
+                    "format": "json",
+                    "limit": 5,
+                    "viewbox": viewbox,
+                    "bounded": 1,
+                    "addressdetails": 1,
+                    "extratags": 1,
+                },
+                headers={"User-Agent": config.HTTP_USER_AGENT},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            places = resp.json()
+            if places:
+                break
+        except Exception:
+            continue
 
     if not places:
         return ""
