@@ -1001,6 +1001,32 @@ def render_calculator():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TAWK.TO LIVE AGENT  (loaded silently; PIZZABOT controls when it opens)
+# ═══════════════════════════════════════════════════════════════════════════════
+def _inject_tawk():
+    _components.html("""<!DOCTYPE html><html><body><script>
+(function(){
+  if(window.parent.document.getElementById('tawk-loaded')) return;
+  var m=window.parent.document.createElement('span');
+  m.id='tawk-loaded'; window.parent.document.body.appendChild(m);
+  window.parent.Tawk_API=window.parent.Tawk_API||{};
+  window.parent.Tawk_LoadStart=new Date();
+  var s=window.parent.document.createElement('script');
+  s.async=true;
+  s.src='https://embed.tawk.to/69fb4cb2bdb4e31c36451f49/1jnuq764p';
+  s.charset='UTF-8'; s.setAttribute('crossorigin','*');
+  window.parent.document.body.appendChild(s);
+  // Hide default Tawk bubble once loaded — PIZZABOT controls handoff
+  var t=setInterval(function(){
+    if(window.parent.Tawk_API&&window.parent.Tawk_API.hideWidget){
+      window.parent.Tawk_API.hideWidget(); clearInterval(t);
+    }
+  },300);
+})();
+</script></body></html>""", height=0, scrolling=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # FLOATING AI CHAT WIDGET  (bottom-right corner, every page)
 # Uses components.v1.html so JavaScript actually executes; injects into parent DOM
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1042,6 +1068,8 @@ def _floating_chat():
     #pz-inp::placeholder{{color:#4a2800;}}
     #pz-send{{background:linear-gradient(135deg,#c0392b,#e07840);border:none;border-radius:10px;color:#fff;width:40px;font-size:17px;cursor:pointer;}}
     #pz-send:hover{{opacity:.87;}}
+    #pz-agent{{background:#1c0a00;border:1px solid #3a1a00;border-radius:10px;color:#f4a261;width:38px;font-size:15px;cursor:pointer;transition:background .15s,border-color .15s;}}
+    #pz-agent:hover{{background:#2d1200;border-color:#c0392b;}}
     #pz-btn{{width:68px;height:78px;background:none;border:none;cursor:pointer;padding:0;display:flex;flex-direction:column;align-items:center;gap:3px;filter:drop-shadow(0 4px 14px rgba(192,57,43,.6));transition:transform .2s,filter .2s;}}
     #pz-btn:hover{{transform:scale(1.08);filter:drop-shadow(0 6px 20px rgba(192,57,43,.85));}}
     #pz-lbl{{font-size:9px;font-weight:800;letter-spacing:1.5px;color:#f4a261;text-align:center;background:#110600;border:1px solid #3a1a00;border-radius:6px;padding:2px 6px;}}
@@ -1106,6 +1134,7 @@ def _floating_chat():
       </div>
       <div id="pz-foot">
         <input id="pz-inp" type="text" placeholder="Ask me anything about pizza…">
+        <button id="pz-agent" title="Connect to live agent">👤</button>
         <button id="pz-send">➤</button>
       </div>
     </div>
@@ -1121,6 +1150,14 @@ def _floating_chat():
   p.document.getElementById('pz-btn').onclick  = function(){{p.pzToggle();}};
   p.document.getElementById('pz-send').onclick = function(){{p.pzSend();}};
   p.document.getElementById('pz-inp').onkeypress = function(e){{if(e.key==='Enter') p.pzSend();}};
+  p.document.getElementById('pz-agent').onclick = function(){{ p.pzHandoff(); }};
+
+  p.pzHandoff=function(){{
+    p.pzAdd('Connecting you to our live support team... 🧑‍💼 Please hold on!','pz-b');
+    setTimeout(function(){{
+      if(p.Tawk_API&&p.Tawk_API.showWidget){{ p.Tawk_API.showWidget(); p.Tawk_API.maximize(); }}
+    }},800);
+  }};
 
   p.pzToggle=function(){{
     var panel=p.document.getElementById('pz-panel');
@@ -1151,6 +1188,10 @@ def _floating_chat():
     if(!msg) return;
     inp.value='';
     p.pzAdd(msg,'pz-u');
+    var _ht=['connect to human','human agent','live agent','real person','connect to agent',
+      'speak to someone','talk to human','connect me to','need human','live support',
+      'customer support','speak with agent','want human','talk to agent'];
+    if(_ht.some(function(k){{return msg.toLowerCase().indexOf(k)>=0;}})){{ p.pzHandoff(); return; }}
     p.pzTyping();
     var key=p.PZ_KEY, model=p.PZ_MODEL;
     if(!key){{
@@ -1175,6 +1216,8 @@ def _floating_chat():
       var reply=data.choices&&data.choices[0]?data.choices[0].message.content:'Sorry, could not get answer.';
       var t=p.document.getElementById('pz-typing'); if(t) t.remove();
       p.pzAdd(reply.replace(/\\n/g,'<br>').replace(/\\*\\*(.*?)\\*\\*/g,'<b>$1</b>'),'pz-b');
+      var _ah=['live agent','human agent','support team','connect you to','transfer you'];
+      if(_ah.some(function(k){{return reply.toLowerCase().indexOf(k)>=0;}})){{setTimeout(function(){{p.pzHandoff();}},600);}}
     }}catch(e){{
       var t=p.document.getElementById('pz-typing'); if(t) t.remove();
       p.pzAdd('Connection error — try again.','pz-b');
@@ -1188,6 +1231,7 @@ def _floating_chat():
 # ROUTER
 # ═══════════════════════════════════════════════════════════════════════════════
 _floating_chat()
+_inject_tawk()
 page = st.session_state.page
 if   page == "chat": render_chat()
 elif page == "find": render_find_pizza()
